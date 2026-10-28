@@ -1,0 +1,16 @@
+[package]
+name = "memeasism_subtitle_generator"
+version = "0.1.0"
+edition = "2024"
+build = "build.rs"
+
+[dependencies]
+arboard = {version = "3.7.0", default-features = false}
+rc-cell = "0.1.0"
+rodio = "0.23.0"
+slint = "1.18.1"
+
+
+[build-dependencies]
+slint-build = "1.18.1"
+winres = "0.1.12"
