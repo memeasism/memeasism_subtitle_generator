@@ -50,6 +50,5 @@ pub fn generate(
         let word_delay = characters.saturating_mul(delay_ms);
         word_start = word_start.saturating_add(word_delay);
     }
-
     output
 }

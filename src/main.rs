@@ -40,7 +40,6 @@ fn main() {
     app.on_copy_subtitle(move || {
         let app_output = app_weak.unwrap();
         let content: String = output_read.borrow().clone();
-
         if let Ok(mut clipboard) = Clipboard::new() {
             if let Err(result) = clipboard.set_text(content.clone()) {
                 //runs actions if error and returns early
