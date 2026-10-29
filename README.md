@@ -9,9 +9,11 @@
         <li>Press the copy button to copy the generated text</li>
         <li>Paste into Kdenlive and enjoy!</li>
     </ol>
-    <a href="https://github.com/memeasism/memeasism_subtitle_generator/releases" target="_blank" rel="noopener noreferrer">
-        <h1>Click me to go to downloads!</h1>
-    </a>
+    <h1>
+        <a href="https://github.com/memeasism/memeasism_subtitle_generator/releases" target="_blank" rel="noopener noreferrer">
+            Click me to go to downloads!
+        </a>
+    </h1>
     <h1>How to compile</h1>
     <ol>
         <li>
