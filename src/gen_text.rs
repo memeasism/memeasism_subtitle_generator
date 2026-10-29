@@ -1,8 +1,9 @@
 const POP_START: u32 = 0;
-const POP_IN_MS: u32 = 67;
+const POP_IN_MS: u32 = 67; //the length of the pop in, based on my resolve subtitles, 60 fps, 4 frames for POP_IN_MS and 6 frames for POP_MS, start is 0 because it looks cool, resolve I do 75 actually
 const POP_MS: u32 = 100;
-const POP_OUT_MS: u32 = POP_MS + POP_IN_MS;
+const POP_OUT_MS: u32 = POP_MS + POP_IN_MS; //could be static, this is just easier
 fn generate_tags(start: u32, pop_out_text: &str) -> String {
+    //seperate function for generating tags, allows early return
     let pop_in: u32 = start.saturating_add(POP_IN_MS);
     let pop_fin: u32 = start.saturating_add(POP_MS);
     format!(
@@ -20,6 +21,7 @@ pub fn generate(
     let pop_out_start: u32 = duration_ms.saturating_sub(POP_OUT_MS);
     let pop_out_mid: u32 = pop_out_start.saturating_add(POP_IN_MS);
     let pop_out_text: String = if pop_out {
+        //if pop out, then this string has a real value, otherwise its just an empty string
         format!(
             "\\t({},{},\\fscx125\\fscy125)\\t({},{},\\fscx{}\\fscy{})",
             pop_out_start, pop_out_mid, pop_out_mid, duration_ms, POP_START, POP_START
@@ -28,7 +30,7 @@ pub fn generate(
         String::new()
     };
     if !word_by_word {
-        return format!("{}{}", generate_tags(0, &pop_out_text), text);
+        return format!("{}{}", generate_tags(0, &pop_out_text), text); //early return if not using word by word
     }
     let words: Vec<&str> = text.split_whitespace().collect();
     if words.is_empty() {
@@ -38,17 +40,15 @@ pub fn generate(
     let mut word_start: u32 = 0;
     let mut output: String = String::new();
     for (iteration, word) in words.iter().enumerate() {
-        output.push_str(&format!(
-            "{}{}",
-            &generate_tags(word_start, &pop_out_text),
-            word
-        ));
+        //iterate over all words to generate word by word
+        output.push_str(&generate_tags(word_start, &pop_out_text));
+        output.push_str(word);
         if iteration + 1 < words.len() {
             output.push(' ');
         }
         let characters: u32 = word.chars().count() as u32;
-        let word_delay = characters * delay_ms;
-        word_start = word_start + word_delay;
+        let word_delay = characters.saturating_mul(delay_ms);
+        word_start = word_start.saturating_add(word_delay);
     }
 
     output
