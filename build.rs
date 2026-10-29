@@ -3,7 +3,7 @@ fn main() {
     #[cfg(windows)]
     {
         winres::WindowsResource::new()
-            .set_icon("icons/icon.ico") // Path relative to crate root
+            .set_icon("icons/icon.ico")
             .compile()
             .unwrap();
     }
