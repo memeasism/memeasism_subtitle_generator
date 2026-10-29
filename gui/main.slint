@@ -94,6 +94,7 @@ component inputs { // the input boxes formatted, and with variables to look good
     in-out property <string> fps_content: "60.00";
     in-out property <string> word_delay: "10";
     in-out property <bool> word_by_word: true;
+    in-out property <bool> pop_out: false;
     VerticalLayout {
         spacing: 4rem;
         width: 100%;
@@ -108,13 +109,13 @@ component inputs { // the input boxes formatted, and with variables to look good
         HorizontalLayout {
             spacing: 2rem;
             vertical-stretch: 0;
-            vertical-input {
+            if root.pop_out: vertical-input {
                 text: "Length";
                 input_text <=> root.length_content;
                 edited => { root.inputs_changed(); }
             }
 
-            vertical-input {
+            if root.pop_out: vertical-input {
                 text: "FPS";
                 input_text <=> root.fps_content;
                 edited => { root.inputs_changed(); }
@@ -237,6 +238,7 @@ export component GUI inherits Window {
             fps_content <=> root.fps_content;
             word_delay <=> root.word_delay;
             word_by_word <=> root.word_by_word;
+            pop_out <=> root.pop_out;
             inputs_changed => { root.inputs_changed(); }
         }
 
