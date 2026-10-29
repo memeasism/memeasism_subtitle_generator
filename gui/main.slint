@@ -1,21 +1,67 @@
-import { VerticalBox, HorizontalBox, ScrollView } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
 import "fonts/impact.ttf";
-component button inherits Rectangle {
+global THEME { //just colors set as variables basically, makes it easier to read and use imo, based off of my profile picture.
+    out property <color> white: #ffffff;
+    out property <color> black: #000000;
+    out property <color> light_grey: #c0c0c0;
+    out property <color> grey: #686868;
+    out property <color> medium_grey: #494949;
+    out property <color> dark_grey: #282828;
+    out property <color> coal: #181425;
+    out property <color> red:#e53b44;
+}
+
+component vertical_input inherits VerticalLayout { //input box with text above it, defined here so it's less code overall
+    in property <length> font_size: 2rem;
+    in property <length> input_font_size: 2rem;
+    in property <color> background_color: THEME.light_grey;
+    in property <color> text_color: THEME.white;
+    in property <color> text_stroke: THEME.black;
+    in property <color> input_text_color: THEME.black;
+    in property <string> text: "Text";
+    in-out property <string> input_text: "";
+    callback edited();
+    Text {
+        text: root.text;
+        font-size: root.font_size;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        color: root.text_color;
+        stroke: root.text_stroke;
+    }
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: root.background_color;
+        TextInput {
+            text <=> root.input_text;
+            edited => { root.edited(); }
+            font-size: root.input_font_size;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            color: root.input_text_color;
+            single-line: false;
+            wrap: word-wrap;
+        }
+    }
+}
+
+component button inherits Rectangle { //custom button, the one build into slint lacks customization
     in property <string> text;
     in property <bool> checkable: false;
     in-out property <bool> checked: false;
-    in-out property <bool> enabled: true;
-    in property <color> background_color: #686868;
-    in property <color> checked_background_color: #e53b44;
-    in property <color> pressed_color: #494949;
-    in property <color> hover_color: #181425;
-    in property <color> text_color: #ffffff;
-    in property <color> stroke: #000000;
-    in property <length> font_size: 0.075 * root.width;
-    in property <length> radius: 0.5rem;
+    in property <color> background_color: THEME.grey;
+    in property <color> checked_background_color: THEME.red;
+    in property <color> pressed_color: THEME.medium_grey;
+    in property <color> hover_color: THEME.coal;
+    in property <color> text_color: THEME.white;
+    in property <color> stroke: THEME.black;
+    in property <length> font_size: 2rem;
+    in property <length> radius: 1rem;
     callback clicked;
+    vertical-stretch: 0;
     background: {
-        if (!root.enabled) { return #000000; }
         if (root.checked) { return root.checked_background_color; }
         if (touch.pressed) { return root.pressed_color; }
         if (touch.has-hover) { return root.hover_color; }
@@ -32,7 +78,6 @@ component button inherits Rectangle {
     }
 
     touch := TouchArea {
-        enabled: root.enabled;
         clicked => {
             if (root.checkable) {
                 root.checked = !root.checked;
@@ -42,139 +87,68 @@ component button inherits Rectangle {
     }
 }
 
-component text_box {
+component inputs { // the input boxes formatted, and with variables to look good
     callback inputs_changed();
     in-out property <string> text_content;
     in-out property <string> length_content: "00:00:00:00";
     in-out property <string> fps_content: "60.00";
     in-out property <string> word_delay: "10";
     in-out property <bool> word_by_word: true;
-    VerticalBox {
+    VerticalLayout {
+        spacing: 4rem;
         width: 100%;
         height: 100%;
-        Text {
-            text: "Insert Text Here";
-            font-size: 0.05 * root.width;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            color: #ffffff;
-            stroke: #000000;
+        vertical_input {
+            text: "Subtitle Text";
+            input_text <=> root.text_content;
+            input_font_size: 1rem;
+            edited => { root.inputs_changed(); }
         }
 
-        Rectangle {
-            background: #c0c0c0;
-            TextInput {
-                text <=> root.text_content;
-                edited => { root.inputs_changed(); }
-                font-size: 0.025 * root.width;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-                color: #000000;
-                single-line: false;
-                wrap: word-wrap;
-            }
-        }
-
-        HorizontalBox {
+        HorizontalLayout {
+            spacing: 2rem;
             vertical-stretch: 0;
-            VerticalBox {
-                Text {
-                    text: "Length";
-                    font-size: 0.025 * root.width;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                    color: #ffffff;
-                    stroke: #000000;
-                }
-
-                Rectangle {
-                    width: 100%;
-                    height: 100%;
-                    background: #c0c0c0;
-                    TextInput {
-                        text <=> root.length_content;
-                        edited => { root.inputs_changed(); }
-                        font-size: 0.025 * root.width;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
-                        color: #000000;
-                    }
-                }
+            vertical-input {
+                text: "Length";
+                input_text <=> root.length_content;
+                edited => { root.inputs_changed(); }
             }
 
-            VerticalBox {
-                Text {
-                    text: "FPS";
-                    font-size: 0.025 * root.width;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                    color: #ffffff;
-                    stroke: #000000;
-                }
-
-                Rectangle {
-                    width: 100%;
-                    height: 100%;
-                    background: #c0c0c0;
-                    TextInput {
-                        text <=> root.fps_content;
-                        edited => { root.inputs_changed(); }
-                        font-size: 0.025 * root.width;
-                        vertical-alignment: center;
-                        horizontal-alignment: center;
-                        color: #000000;
-                    }
-                }
+            vertical-input {
+                text: "FPS";
+                input_text <=> root.fps_content;
+                edited => { root.inputs_changed(); }
             }
 
-            if root.word_by_word: VerticalBox {
-                Text {
-                    text: "Word Delay";
-                    font-size: 0.025 * root.width;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                    color: #ffffff;
-                    stroke: #000000;
-                }
-
-                Rectangle {
-                    width: 100%;
-                    height: 100%;
-                    background: #c0c0c0;
-                    TextInput {
-                        text <=> root.word_delay;
-                        edited => { root.inputs_changed(); }
-                        font-size: 0.025 * root.width;
-                        vertical-alignment: center;
-                        horizontal-alignment: center;
-                        color: #000000;
-                    }
-                }
+            if root.word_by_word: vertical-input {
+                text: "Word Delay";
+                input_text <=> root.word_delay;
+                edited => { root.inputs_changed(); }
             }
         }
     }
 }
 
-component buttons {
+component buttons { //the buttons formatted, and with variables to look good
     in-out property <string> output_text;
     in-out property <bool> word_by_word: true;
     in-out property <bool> pop_out: false;
     callback copy_subtitle();
     callback inputs_changed();
-    VerticalBox {
+    VerticalLayout {
         width: 100%;
         height: 100%;
+        spacing: 1rem;
         Text {
             text: "Toggles:";
-            font-size: 0.075 * root.width;
+            font-size: 2rem;
             horizontal-alignment: center;
             vertical-alignment: center;
-            color: #ffffff;
-            stroke: #000000;
+            color: THEME.white;
+            stroke: THEME.black;
         }
 
         button {
-            vertical-stretch: 0;
             text: "Word By Word";
             checkable: true;
             checked <=> root.word_by_word;
@@ -182,7 +156,6 @@ component buttons {
         }
 
         button {
-            vertical-stretch: 0;
             text: "Pop Out";
             checkable: true;
             checked <=> root.pop_out;
@@ -191,20 +164,19 @@ component buttons {
 
         Text {
             text: "Output:";
-            font-size: 0.075 * root.width;
+            font-size: 2rem;
             horizontal-alignment: center;
             vertical-alignment: center;
-            color: #ffffff;
-            stroke: #000000;
+            color: THEME.white;
+            stroke: THEME.black;
         }
 
         Rectangle {
-            vertical-stretch: 0;
             width: 100%;
             height: 100%;
             clip: true;
-            background: #c0c0c0;
-            scroll := ScrollView {
+            background: THEME.light_grey;
+            ScrollView {
                 width: 100%;
                 height: 100%;
                 content-width: parent.width;
@@ -216,8 +188,8 @@ component buttons {
                     Text {
                         width: 100%;
                         height: 100%;
-                        font-size: 0.05 * root.width;
-                        color: #000000;
+                        font-size: 1rem;
+                        color: THEME.black;
                         text: root.output_text;
                         wrap: word-wrap;
                     }
@@ -226,7 +198,6 @@ component buttons {
         }
 
         button {
-            vertical-stretch: 0;
             text: "Copy Subtitle";
             clicked => { root.copy_subtitle() }
         }
@@ -245,33 +216,39 @@ export component GUI inherits Window {
     callback inputs_changed();
     title: "Memeaism Subtitle Generator";
     icon: @image-url("../icons/icon.ico");
-    background: #282828;
+    background: THEME.dark_grey;
     preferred-width: 640px;
     preferred-height: 480px;
+    min-height: 240px;
+    min-width: 240px;
+    default-font-size: min(self.width / 80, self.height / 60);
+    //dynamic default font size, prevents issues, and allows rem to work, which is cleaner for the code
     default-font-family: "Impact";
-    //min-width: self.preferred-width;
-    //min-height: self.preferred-height;
-    text_box {
-        width: 75%;
-        height: 75%;
-        x: 0;
-        text_content <=> root.text_content;
-        length_content <=> root.length_content;
-        fps_content <=> root.fps_content;
-        word_delay <=> root.word_delay;
-        word_by_word <=> root.word_by_word;
-        inputs_changed => { root.inputs_changed(); }
-    }
+    HorizontalLayout { //layout the inputs and buttons horizontally
+        y: parent.height / 10; //center vertically
+        width: 95%;
+        height: 100%;
+        spacing: 1rem;
+        inputs {
+            width: 75%;
+            height: 75%;
+            text_content <=> root.text_content;
+            length_content <=> root.length_content;
+            fps_content <=> root.fps_content;
+            word_delay <=> root.word_delay;
+            word_by_word <=> root.word_by_word;
+            inputs_changed => { root.inputs_changed(); }
+        }
 
-    buttons {
-        width: 25%;
-        height: 50%;
-        x: parent.width - self.width;
-        y: (parent.height - self.height) / 3;
-        output-text <=> root.output-text;
-        word_by_word <=> root.word_by_word;
-        pop_out <=> root.pop_out;
-        copy_subtitle => { root.copy_subtitle(); }
-        inputs_changed => { root.inputs_changed(); }
+        buttons {
+            y: parent.y * 2; //center vertically
+            width: 25%;
+            height: 25%;
+            output-text <=> root.output-text;
+            word_by_word <=> root.word_by_word;
+            pop_out <=> root.pop_out;
+            copy_subtitle => { root.copy_subtitle(); }
+            inputs_changed => { root.inputs_changed(); }
+        }
     }
 }

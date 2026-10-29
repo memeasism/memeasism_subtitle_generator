@@ -7,7 +7,6 @@ use rodio::Source;
 use slint::ComponentHandle;
 use std::io::Cursor;
 use std::rc::Rc;
-use std::thread;
 use std::time::Duration;
 const SUCCESS_SOUND: &[u8] = include_bytes!("../sounds/success.flac");
 const ERROR_SOUND: &[u8] = include_bytes!("../sounds/error.flac");
@@ -18,28 +17,24 @@ fn main() {
     let output_read: RcCell<String> = output.clone();
     let app = GUI::new().unwrap();
     let app_weak = app.as_weak();
-    let audio_handle =
-        Rc::new(rodio::DeviceSinkBuilder::open_default_sink().expect("open default audio stream"));
+    let audio_handle: Option<Rc<rodio::MixerDeviceSink>> =
+        rodio::DeviceSinkBuilder::open_default_sink()
+            .ok()
+            .map(Rc::new);
     app.on_inputs_changed(move || {
         let app_output = app_weak.upgrade().unwrap();
         let word_by_word: bool = app_output.get_word_by_word();
         let pop_out: bool = app_output.get_pop_out();
-        let delay: u16 = app_output.get_word_delay().parse().unwrap_or(2);
+        let delay: u32 = app_output.get_word_delay().parse().unwrap_or(2);
         let fps: f32 = app_output.get_fps_content().parse().unwrap_or(60.0);
         let text: String = app_output.get_text_content().to_string();
         let length: String = app_output.get_length_content().to_string();
-        let duration_ms: u32 = match parse_time::parse(length, fps) {
-            Some(ms) => ms,
-            None => {
-                app_output.set_output_text("Invalid Timecode".into());
-                return;
-            }
-        };
+        let duration_ms: u32 = parse_time::parse(length, fps);
         *output_write.borrow_mut() =
             gen_text::generate(word_by_word, pop_out, delay, text, duration_ms);
-        app_output.set_output_text(output_write.borrow().clone().into());
+        app_output.set_output_text(output_write.borrow().as_str().into());
     });
-    let current_audio_handle = Rc::clone(&audio_handle);
+    let current_audio_handle = audio_handle.as_ref().map(Rc::clone);
     let app_weak = app.as_weak();
     app.on_copy_subtitle(move || {
         let app_output = app_weak.unwrap();
@@ -48,17 +43,25 @@ fn main() {
         if let Ok(mut clipboard) = Clipboard::new() {
             if let Err(result) = clipboard.set_text(content.clone()) {
                 app_output.set_output_text(format!("ERROR COPYING: {}", result).into());
-                let audio = Cursor::new(ERROR_SOUND);
-                let source = rodio::Decoder::try_from(audio).unwrap().amplify(0.075);
-                current_audio_handle.mixer().add(source);
-                thread::sleep(Duration::from_secs(3));
-                app_output.set_output_text(content.clone().into());
+                if let Some(handle) = &current_audio_handle {
+                    if let Ok(source) = rodio::Decoder::try_from(Cursor::new(ERROR_SOUND)) {
+                        handle.mixer().add(source.amplify(0.075));
+                    }
+                }
+                let app_weak_reset = app_weak.clone();
+                let content_reset = content.clone();
+                slint::Timer::single_shot(Duration::from_secs(3), move || {
+                    if let Some(app_output) = app_weak_reset.upgrade() {
+                        app_output.set_output_text(content_reset.clone().into());
+                    }
+                });
                 return;
             };
-
-            let audio = Cursor::new(SUCCESS_SOUND);
-            let source = rodio::Decoder::try_from(audio).unwrap().amplify(0.075);
-            current_audio_handle.mixer().add(source);
+            if let Some(handle) = &current_audio_handle {
+                if let Ok(source) = rodio::Decoder::try_from(Cursor::new(SUCCESS_SOUND)) {
+                    handle.mixer().add(source.amplify(0.075));
+                }
+            }
         }
     });
     app.run().unwrap();
