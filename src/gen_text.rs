@@ -1,54 +1,180 @@
-const POP_START: u32 = 0;
-const POP_IN_MS: u32 = 67; //the length of the pop in, based on my resolve subtitles, 60 fps, 4 frames for POP_IN_MS and 6 frames for POP_MS, start is 0 because it looks cool, resolve I do 75 actually
+use std::fmt::Write;
+const POP_START_MULTIPLIER: f32 = 0.0; //0% size
+const POP_PEAK_MULTIPLIER: f32 = 1.25; //125% size
+const POP_IN_MS: u32 = 67; //the length of the pop in, based on my resolve subtitles
+//60 fps, 4 frames for POP_IN_MS and 6 frames for POP_MS
+//start is 0 because it looks cool, resolve I do 75 actually
 const POP_MS: u32 = 100;
 const POP_OUT_MS: u32 = POP_MS + POP_IN_MS; //could be static, this is just easier
-fn generate_tags(start: u32, pop_out_text: &str) -> String {
+const TAG_LENGTH: usize = 44; //the literal count of the tag length before adding everything else
+fn count_digit_bytes(number: u32) -> usize {
+    //function to grab how many bytes a number is
+    if number == 0 {
+        1
+    } else {
+        (number.ilog10() as usize) + 1
+    }
+}
+fn tag_block_length(
+    //function to precompute tag length, just an uneccesary optimization
+    start: u32,
+    pop_start: u32,
+    pop_peak: u32,
+    pop_end: u32,
+    pop_out_text: &str,
+    center_text: &str,
+    rotation_text: &str,
+) -> usize {
+    let pop_in: u32 = start.saturating_add(POP_IN_MS);
+    let pop_fin: u32 = start.saturating_add(POP_MS);
+    TAG_LENGTH
+        + count_digit_bytes(pop_start) * 2
+        + count_digit_bytes(start)
+        + count_digit_bytes(pop_in) * 2
+        + count_digit_bytes(pop_peak) * 2
+        + count_digit_bytes(pop_fin)
+        + count_digit_bytes(pop_end) * 2
+        + rotation_text.len()
+        + center_text.len()
+        + pop_out_text.len()
+}
+fn generate_tags(
+    output: &mut String,
+    pop_out_text: &str,
+    center_text: &str,
+    rotation_text: &str,
+    start: u32,
+    pop_start: u32,
+    pop_peak: u32,
+    pop_end: u32,
+) {
     //seperate function for generating tags, allows early return
     let pop_in: u32 = start.saturating_add(POP_IN_MS);
     let pop_fin: u32 = start.saturating_add(POP_MS);
-    format!(
-        "{{\\fscx{}\\fscy{}\\t({},{},\\fscx125\\fscy125)\\t({},{},\\fscx100\\fscy100){}}}",
-        POP_START, POP_START, start, pop_in, pop_in, pop_fin, pop_out_text
-    )
+
+    let _output: Result<(), std::fmt::Error> = write!(
+        // variable = ignore failure = simpler code with no crash
+        output,
+        "{{\\fscx{}\\fscy{}\\t({},{},\\fscx{}\\fscy{})\\t({},{},\\fscx{}\\fscy{}){}{}{}}}",
+        pop_start,
+        pop_start,
+        start,
+        pop_in,
+        pop_peak,
+        pop_peak,
+        pop_in,
+        pop_fin,
+        pop_end,
+        pop_end,
+        rotation_text,
+        center_text,
+        pop_out_text
+    );
 }
 pub fn generate(
     word_by_word: bool,
     pop_out: bool,
-    delay: u32,
-    text: String,
+    center: bool,
+    delay: f32,
+    scale: f32,
+    rotation: f32,
+    text: &str,
     duration_ms: u32,
 ) -> String {
+    let pop_start: u32 = (scale * POP_START_MULTIPLIER).round() as u32;
+    let pop_peak: u32 = (scale * POP_PEAK_MULTIPLIER).round() as u32;
+    let pop_end: u32 = scale.round() as u32;
     let pop_out_start: u32 = duration_ms.saturating_sub(POP_OUT_MS);
     let pop_out_mid: u32 = pop_out_start.saturating_add(POP_IN_MS);
-    let pop_out_text: String = if pop_out {
+    let center_text: &str = if center { "\\an5" } else { "" };
+    let rotation_text: &str = if rotation != 0.0 {
+        &format!("\\fr{}", rotation)
+    } else {
+        ""
+    };
+    let pop_out_text: &str = if pop_out {
         //if pop out, then this string has a real value, otherwise its just an empty string
-        format!(
-            "\\t({},{},\\fscx125\\fscy125)\\t({},{},\\fscx{}\\fscy{})",
-            pop_out_start, pop_out_mid, pop_out_mid, duration_ms, POP_START, POP_START
+        &format!(
+            "\\t({},{},\\fscx{}\\fscy{})\\t({},{},\\fscx{}\\fscy{})",
+            pop_out_start,
+            pop_out_mid,
+            pop_peak,
+            pop_peak,
+            pop_out_mid,
+            duration_ms,
+            pop_start,
+            pop_start
         )
     } else {
-        String::new()
+        ""
     };
     if !word_by_word {
-        return format!("{}{}", generate_tags(0, &pop_out_text), text); //early return if not using word by word
+        let tag_length: usize = tag_block_length(
+            0,
+            pop_start,
+            pop_peak,
+            pop_end,
+            pop_out_text,
+            center_text,
+            rotation_text,
+        );
+        let mut output: String = String::with_capacity(tag_length + text.len()); //preallocate memory, RAMPOCALYPSE! But realistically useless
+        generate_tags(
+            &mut output,
+            pop_out_text,
+            center_text,
+            rotation_text,
+            0,
+            pop_start,
+            pop_peak,
+            pop_end,
+        );
+        output.push_str(text);
+        return output; //early return if not using word by word
     }
     let words: Vec<&str> = text.split_whitespace().collect();
     if words.is_empty() {
         return String::new();
     }
-    let delay_ms: u32 = delay.saturating_mul(10);
+    let delay_ms: u32 = (delay * 10.0).round() as u32;
+    let mut word_starts: Vec<u32> = Vec::with_capacity(words.len());
+    let mut tag_length: usize = 0;
     let mut word_start: u32 = 0;
-    let mut output: String = String::new();
     for (iteration, word) in words.iter().enumerate() {
-        //iterate over all words to generate word by word
-        output.push_str(&generate_tags(word_start, &pop_out_text));
+        //collect all word starts when getting tag length to save on compute
+        word_starts.push(word_start);
+        tag_length += tag_block_length(
+            word_start,
+            pop_start,
+            pop_peak,
+            pop_end,
+            pop_out_text,
+            center_text,
+            rotation_text,
+        );
+        tag_length += word.len();
+        if iteration + 1 < words.len() {
+            tag_length += 1;
+        }
+        let characters: u32 = word.chars().count() as u32;
+        word_start = word_start.saturating_add(characters.saturating_mul(delay_ms));
+    }
+    let mut output: String = String::with_capacity(tag_length); //preallocate memory, RAMPOCALYPSE! But realistically useless
+    for (iteration, word) in words.iter().enumerate() {
+        generate_tags(
+            &mut output,
+            pop_out_text,
+            center_text,
+            rotation_text,
+            word_starts[iteration],
+            pop_start,
+            pop_peak,
+            pop_end,
+        );
         output.push_str(word);
         if iteration + 1 < words.len() {
             output.push(' ');
         }
-        let characters: u32 = word.chars().count() as u32;
-        let word_delay = characters.saturating_mul(delay_ms);
-        word_start = word_start.saturating_add(word_delay);
     }
     output
 }

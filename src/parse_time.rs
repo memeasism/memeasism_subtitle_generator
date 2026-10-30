@@ -1,7 +1,14 @@
-pub fn parse(length: String, fps: f32) -> u32 {
-    let length_split: Vec<&str> = length.split(':').collect();
-    let [h, m, s, f] = length_split.as_slice() else {
-        return 0; //split the length string into the seperate values, or return a length of 0
+pub fn parse(length: &str, fps: f32) -> u32 {
+    let mut length_split: std::str::Split<'_, char> = length.split(':');
+    let (Some(h), Some(m), Some(s), Some(f), None) = (
+        //get 4 values, if there's a fifth return 0, means if more than 5 values, it will also return 0
+        length_split.next(),
+        length_split.next(),
+        length_split.next(),
+        length_split.next(),
+        length_split.next(),
+    ) else {
+        return 0;
     };
     let hours: u32 = h.parse().unwrap_or(0);
     let minutes: u32 = m.parse().unwrap_or(0);

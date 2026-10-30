@@ -11,19 +11,210 @@ global THEME { //just colors set as variables basically, makes it easier to read
     out property <color> red:#e53b44;
 }
 
+component dragger inherits TouchArea { //basically an insert here logic for dragable items
+    in-out property <float> current;
+    in property <float> default;
+    in property <float> min_value;
+    in property <float> max_value;
+    in property <float> max_rotation;
+    in property <bool> horizontal: false;
+    in property <length> sensitivity: 5rem;
+    property <length> start_x: 0px;
+    property <length> start_y: 0px;
+    property <float> last_angle: 0.0;
+    property <float> start_value: 0;
+    property <bool> touching: false;
+    width: 100%;
+    height: 100%;
+    callback not_dragged();
+    double-clicked => {
+        root.current = root.default;
+    }
+
+    pointer-event(event) => {
+        if (event.kind == PointerEventKind.down
+            && event.button == PointerEventButton.left) {
+            root.start_x = root.mouse-x;
+            root.start_y = root.mouse-y;
+            root.start_value = root.current;
+            root.touching = true;
+            root.last_angle = Math.atan2(
+                (root.mouse-x - root.width / 2) / 1px,
+                -(root.mouse-y - root.height / 2) / 1px) / 1deg;
+        } else if (event.kind == PointerEventKind.up) {
+            if (root.touching) {
+                let distance_x = (root.mouse-x - root.start_x) / 1px;
+                let distance_y = (root.mouse-y - root.start_y) / 1px;
+                let distance = Math.sqrt(distance_x * distance_x + distance_y * distance_y);
+                if (distance < 1) {
+                    root.not_dragged();
+                }
+            }
+            root.touching = false;
+        } else if (event.kind == PointerEventKind.move && root.touching) {
+            if root.horizontal {
+                let difference_px = (root.mouse-x - root.start_x) / 1px;
+                let per_px = (root.max_value - root.min_value) / (root.sensitivity / 1px);
+                root.current = Math.max(root.min_value, Math.min(root.max_value,
+                    root.start_value + difference_px * per_px));
+            } else {
+                let new_angle = Math.atan2(
+                (root.mouse-x - root.width / 2) / 1px,
+                -(root.mouse-y - root.height / 2) / 1px) / 1deg;
+                let raw = new_angle - root.last_angle;
+                let delta = raw > 180 ? raw - 360 : (raw < -180 ? raw + 360 : raw);
+                let per_deg = (root.max_value - root.min_value) / root.max_rotation;
+                root.current = Math.max(root.min_value, Math.min(root.max_value,
+                root.current + delta * per_deg));
+                root.last_angle = new_angle;
+            }
+        }
+    }
+}
+
+component dial inherits VerticalLayout { //dragable dial and text input box 
+    in-out property <float> current: 0.0;
+    in property <float> default: 0.0;
+    in property <float> min_value: 0.0;
+    in property <float> max_value: 359.0;
+    in property <float> max_rotation: 270.0;
+    in property <length> size: 6rem;
+    in property <length> text_size: 1.25rem;
+    in property <color> background_color: THEME.medium_grey;
+    in property <color> notch_color: THEME.coal;
+    in property <color> text_background_color: THEME.light_grey;
+    in property <color> text_color: THEME.black;
+    property <string> current_string: current.to-string-unlocalized();
+    property <float> safe_current: clamp(current, min_value, max_value);
+    property <angle> angle: (((safe_current - min_value) / (max_value - min_value)) * max_rotation - max_rotation / 2) * 1deg; //generate the rotation angle
+    changed current => { current_string = current.to-string-unlocalized(); }
+    spacing: 1rem;
+    Rectangle {
+        width: root.size;
+        height: self.width;
+        Rectangle {
+            width: 100%;
+            height: 100%;
+            background: root.background_color;
+            border-radius: min(self.width, self.height) / 2; //make circle
+        transform-rotation: root.angle - 180deg;
+            Rectangle {
+                width: 5%;
+                height: 50%;
+                x: (parent.width - self.width) / 2;
+                y: parent.height / 2 - self.width;
+                background: root.notch_color;
+            }
+        }
+
+        dragger {
+            current <=> root.current;
+            default: default;
+            min_value: root.min_value;
+            max_value: root.max_value;
+            max_rotation: root.max_rotation;
+        }
+    }
+
+    Rectangle {
+        width: root.size;
+        height: text_size * 2;
+        background: text_background_color;
+        text_input := TextInput {
+            width: 100%;
+            height: 100%;
+            font-size: root.text_size;
+            color: text_color;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+            text <=> root.current_string;
+            edited => {
+                if (self.text.is-float() && self.text != root.current_string) {
+                    root.current = clamp(
+                root.current_string.to-float(),
+                root.min_value,
+                root.max_value);
+                }
+            }
+        }
+
+        dragger {
+            current <=> root.current;
+            default: default;
+            min_value: root.min_value;
+            max_value: root.max_value;
+            max_rotation: root.max_rotation;
+            horizontal: true;
+            not_dragged => { text_input.focus(); text_input.select-all(); }
+        }
+    }
+}
+
+component text_dial inherits VerticalLayout { //just a dial with text box above it
+    in-out property <float> current: 0.0;
+    in property <float> default: 0.0;
+    in property <float> min_value: 0.0;
+    in property <float> max_value: 359.0;
+    in property <float> max_rotation: 270.0;
+    in property <length> text_size: 2rem;
+    in property <length> size: 6rem;
+    in property <length> dial_text_size: 1.25rem;
+    in property <color> text_color: THEME.white;
+    in property <color> text_stroke: THEME.black;
+    in property <color> dial_background_color: THEME.medium_grey;
+    in property <color> notch_color: THEME.coal;
+    in property <color> dial_text_background_color: THEME.light_grey;
+    in property <color> dial_text_color: THEME.black;
+    in property <string> text: "Text";
+    spacing: 1rem;
+    Text {
+        text: root.text;
+        font-size: root.text_size;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        color: root.text_color;
+        stroke: root.text_stroke;
+    }
+
+    HorizontalLayout {
+        vertical-stretch: 0;
+        alignment: center;
+        dial {
+            current <=> root.current;
+            default: root.default;
+            min_value: root.min_value;
+            max_value: root.max_value;
+            max_rotation: root.max_rotation;
+            text_size: dial_text_size;
+            background_color: dial_background_color;
+            text_color: dial_text_color;
+            text_background_color: dial_text_background_color;
+            size: root.size;
+            notch_color: root.notch_color;
+        }
+    }
+}
+
+
 component vertical_input inherits VerticalLayout { //input box with text above it, defined here so it's less code overall
-    in property <length> font_size: 2rem;
+    in property <length> text_size: 2rem;
     in property <length> input_font_size: 2rem;
     in property <color> background_color: THEME.light_grey;
     in property <color> text_color: THEME.white;
     in property <color> text_stroke: THEME.black;
     in property <color> input_text_color: THEME.black;
     in property <string> text: "Text";
+    in property <bool> use_dragger: false;
+    in property <float> default: 0.0;
+    in property <float> min_value: 0.0;
+    in property <float> max_value: 359.0;
+    in-out property <float> current: 0.0;
     in-out property <string> input_text: "";
     callback edited();
+    changed current => { input_text = current.to-string-unlocalized(); }
     Text {
         text: root.text;
-        font-size: root.font_size;
+        font-size: root.text_size;
         horizontal-alignment: center;
         vertical-alignment: center;
         color: root.text_color;
@@ -34,7 +225,7 @@ component vertical_input inherits VerticalLayout { //input box with text above i
         width: 100%;
         height: 100%;
         background: root.background_color;
-        TextInput {
+        text_input := TextInput {
             text <=> root.input_text;
             edited => { root.edited(); }
             font-size: root.input_font_size;
@@ -43,6 +234,15 @@ component vertical_input inherits VerticalLayout { //input box with text above i
             color: root.input_text_color;
             single-line: false;
             wrap: word-wrap;
+        }
+
+        if root.use_dragger: dragger {
+            current <=> current;
+            default: default;
+            min_value: min_value;
+            max_value: max_value;
+            horizontal: true;
+            not_dragged => { text_input.focus(); text_input.select-all(); }
         }
     }
 }
@@ -87,121 +287,166 @@ component button inherits Rectangle { //custom button, the one build into slint 
     }
 }
 
-component inputs { // the input boxes formatted, and with variables to look good
+component inputs inherits VerticalLayout { // the input boxes formatted, and with variables to look good
     callback inputs_changed();
     in-out property <string> text_content;
     in-out property <string> length_content: "00:00:00:00";
     in-out property <string> fps_content: "60.00";
-    in-out property <string> word_delay: "10";
+    in-out property <float> word_delay:6;
     in-out property <bool> word_by_word: true;
     in-out property <bool> pop_out: false;
-    VerticalLayout {
-        spacing: 4rem;
-        width: 100%;
-        height: 100%;
-        vertical_input {
-            text: "Subtitle Text";
-            input_text <=> root.text_content;
-            input_font_size: 1rem;
-            edited => { root.inputs_changed(); }
+    property <float> word_delay_default: 6;
+    property <string> word_string: word_delay.to-string-unlocalized();
+    changed length_content => { root.inputs_changed(); }
+    changed fps_content => { root.inputs_changed(); }
+    changed word_delay => { root.inputs_changed(); root.word_string = root.word_delay.to-string-unlocalized(); }
+    spacing: 4rem;
+    vertical_input {
+        vertical-stretch: 1;
+        text: "Subtitle Text";
+        input_text <=> root.text_content;
+        input_font_size: 1rem;
+        edited => { root.inputs_changed(); }
+    }
+
+    HorizontalLayout {
+        property <length> min_number: 5rem;
+        spacing: 2rem;
+        max-height: 5rem;
+        if root.pop_out: vertical_input {
+            min-height: parent.min_number;
+            text: "Length";
+            input_text <=> root.length_content;
         }
 
-        HorizontalLayout {
-            spacing: 2rem;
-            vertical-stretch: 0;
-            if root.pop_out: vertical-input {
-                text: "Length";
-                input_text <=> root.length_content;
-                edited => { root.inputs_changed(); }
-            }
+        if root.pop_out: vertical-input {
+            min-height: parent.min_number;
+            text: "FPS";
+            input_text <=> root.fps_content;
+        }
 
-            if root.pop_out: vertical-input {
-                text: "FPS";
-                input_text <=> root.fps_content;
-                edited => { root.inputs_changed(); }
-            }
+        if root.word_by_word: vertical-input {
 
-            if root.word_by_word: vertical-input {
-                text: "Word Delay";
-                input_text <=> root.word_delay;
-                edited => { root.inputs_changed(); }
+            min-height: parent.min_number;
+            text: "Word Delay";
+            input_text <=> root.word_string;
+            use_dragger: true;
+            current <=> root.word_delay;
+            default: root.word_delay_default;
+            edited => {
+                if (!root.word_string.is-empty && root.word_string.is-float()) {
+                    root.word_delay = root.word_string.to-float();
+                }
             }
         }
     }
 }
 
-component buttons { //the buttons formatted, and with variables to look good
+component buttons inherits VerticalLayout { //the buttons formatted, and with variables to look good
     in-out property <string> output_text;
+    in-out property <float> scale: 100;
+    in-out property <float> rotation;
     in-out property <bool> word_by_word: true;
     in-out property <bool> pop_out: false;
+    in-out property <bool> center_text: false;
+    property <float> default_scale: 100;
     callback copy_subtitle();
     callback inputs_changed();
-    VerticalLayout {
+    changed scale => { root.inputs_changed(); }
+    changed rotation => { root.inputs_changed(); }
+    spacing: 2rem;
+    Text {
+        vertical-stretch: 0;
+        text: "Toggles";
+        font-size: 2rem;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        color: THEME.white;
+        stroke: THEME.black;
+    }
+
+    button {
+        text: "Word By Word";
+        checkable: true;
+        checked <=> root.word_by_word;
+        clicked => { root.inputs_changed(); }
+    }
+
+    button {
+        text: "Pop Out";
+        checkable: true;
+        checked <=> root.pop_out;
+        clicked => { root.inputs_changed(); }
+    }
+
+    button {
+        text: "Center";
+        checkable: true;
+        checked <=> root.center_text;
+        clicked => { root.inputs_changed(); }
+    }
+
+    HorizontalLayout {
+        alignment: center;
         width: 100%;
-        height: 100%;
+        vertical-stretch: 0;
         spacing: 1rem;
-        Text {
-            text: "Toggles:";
-            font-size: 2rem;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            color: THEME.white;
-            stroke: THEME.black;
+        text_dial {
+            text: "Scale %";
+            current <=> root.scale;
+            max_value: 500;
+            default: root.default_scale;
         }
 
-        button {
-            text: "Word By Word";
-            checkable: true;
-            checked <=> root.word_by_word;
-            clicked => { root.inputs_changed(); }
+        text_dial {
+            text: "Rotation °";
+            max_value: 180;
+            min_value: -180;
+            max_rotation: 360;
+            current <=> root.rotation;
         }
+    }
 
-        button {
-            text: "Pop Out";
-            checkable: true;
-            checked <=> root.pop_out;
-            clicked => { root.inputs_changed(); }
-        }
+    Text {
+        vertical-stretch: 0;
+        text: "Output";
+        font-size: 2rem;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        color: THEME.white;
+        stroke: THEME.black;
+    }
 
-        Text {
-            text: "Output:";
-            font-size: 2rem;
-            horizontal-alignment: center;
-            vertical-alignment: center;
-            color: THEME.white;
-            stroke: THEME.black;
-        }
-
-        Rectangle {
+    Rectangle {
+        width: 100%;
+        min-height: 5rem;
+        vertical-stretch: 1;
+        clip: true;
+        background: THEME.light_grey;
+        ScrollView {
             width: 100%;
             height: 100%;
-            clip: true;
-            background: THEME.light_grey;
-            ScrollView {
-                width: 100%;
-                height: 100%;
-                content-width: parent.width;
-                horizontal-scrollbar-policy: always-off;
-                vertical-scrollbar-policy: as-needed;
-                VerticalLayout {
-                    alignment: start;
-                    width: parent.content-width;
-                    Text {
-                        width: 100%;
-                        height: 100%;
-                        font-size: 1rem;
-                        color: THEME.black;
-                        text: root.output_text;
-                        wrap: word-wrap;
-                    }
+            content-width: parent.width;
+            horizontal-scrollbar-policy: always-off;
+            vertical-scrollbar-policy: as-needed;
+            VerticalLayout {
+                alignment: start;
+                width: parent.content-width;
+                Text {
+                    width: 100%;
+                    height: 100%;
+                    font-size: 1rem;
+                    color: THEME.black;
+                    text: root.output_text;
+                    wrap: word-wrap;
                 }
             }
         }
+    }
 
-        button {
-            text: "Copy Subtitle";
-            clicked => { root.copy_subtitle() }
-        }
+    button {
+        text: "Copy Subtitle";
+        clicked => { root.copy_subtitle() }
     }
 }
 
@@ -209,10 +454,13 @@ export component GUI inherits Window {
     in-out property <string> text_content;
     in-out property <string> length_content: "00:00:00:00";
     in-out property <string> fps_content: "60.00";
-    in-out property <string> word_delay: "10";
+    in-out property <float> word_delay: 6.0;
     in-out property <string> output_text;
+    in-out property <float> scale: 100;
+    in-out property <float> rotation;
     in-out property <bool> word_by_word: true;
     in-out property <bool> pop_out: false;
+    in-out property <bool> center_text: false;
     callback copy_subtitle();
     callback inputs_changed();
     title: "Memeaism Subtitle Generator";
@@ -226,13 +474,14 @@ export component GUI inherits Window {
     //dynamic default font size, prevents issues, and allows rem to work, which is cleaner for the code
     default-font-family: "Impact";
     HorizontalLayout { //layout the inputs and buttons horizontally
-        y: parent.height / 10; //center vertically
-        width: 95%;
-        height: 100%;
+        property <percent> scale: 90%; //makes it easier to set size
+        width: self.scale;
+        height: self.scale;
+        y: (parent.height - self.height) / 2 - 2rem; //vertically center minus topmost text size
         spacing: 1rem;
         inputs {
             width: 75%;
-            height: 75%;
+            height: 100%;
             text_content <=> root.text_content;
             length_content <=> root.length_content;
             fps_content <=> root.fps_content;
@@ -243,12 +492,14 @@ export component GUI inherits Window {
         }
 
         buttons {
-            y: parent.y * 2; //center vertically
             width: 25%;
-            height: 25%;
+            height: 100%;
             output-text <=> root.output-text;
+            scale <=> root.scale;
+            rotation <=> root.rotation;
             word_by_word <=> root.word_by_word;
             pop_out <=> root.pop_out;
+            center_text <=> root.center_text;
             copy_subtitle => { root.copy_subtitle(); }
             inputs_changed => { root.inputs_changed(); }
         }

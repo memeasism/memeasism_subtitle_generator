@@ -26,13 +26,24 @@ fn main() {
         let app_output = app_weak.upgrade().unwrap();
         let word_by_word: bool = app_output.get_word_by_word();
         let pop_out: bool = app_output.get_pop_out();
-        let delay: u32 = app_output.get_word_delay().parse().unwrap_or(2);
+        let center: bool = app_output.get_center_text();
+        let delay: f32 = app_output.get_word_delay();
         let fps: f32 = app_output.get_fps_content().parse().unwrap_or(60.0); //grabs all the needed info
-        let text: String = app_output.get_text_content().to_string();
-        let length: String = app_output.get_length_content().to_string();
+        let scale: f32 = app_output.get_scale();
+        let rotation: f32 = app_output.get_rotation();
+        let text: &str = &app_output.get_text_content();
+        let length: &str = &app_output.get_length_content();
         let duration_ms: u32 = parse_time::parse(length, fps);
-        *output_write.borrow_mut() =
-            gen_text::generate(word_by_word, pop_out, delay, text, duration_ms); //updates the output variable
+        *output_write.borrow_mut() = gen_text::generate(
+            word_by_word,
+            pop_out,
+            center,
+            delay,
+            scale,
+            rotation,
+            text,
+            duration_ms,
+        ); //updates the output variable
         app_output.set_output_text(output_write.borrow().as_str().into()); //updates output ui
     });
     let current_audio_handle = audio_handle.as_ref().map(Rc::clone); //sets cloned audio handle
@@ -50,10 +61,10 @@ fn main() {
                     }
                 }
                 let app_weak_reset = app_weak.clone();
-                let content_reset = content.clone();
+                let content_reset = content;
                 slint::Timer::single_shot(Duration::from_secs(3), move || {
                     if let Some(app_output) = app_weak_reset.upgrade() {
-                        app_output.set_output_text(content_reset.clone().into());
+                        app_output.set_output_text(content_reset.into());
                     }
                 });
                 return;
