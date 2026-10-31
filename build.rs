@@ -1,5 +1,5 @@
 fn main() {
-    slint_build::compile("gui/main.slint").unwrap(); //build the UI
+    slint_build::compile("src/main.slint").unwrap(); //build the UI
     #[cfg(windows)] //run only on Windows
     {
         winres::WindowsResource::new()

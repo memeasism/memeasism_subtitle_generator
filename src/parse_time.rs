@@ -1,5 +1,5 @@
 pub fn parse(length: &str, fps: f32) -> u32 {
-    let mut length_split: std::str::Split<'_, char> = length.split(':');
+    let mut length_split: std::str::SplitN<'_, char> = length.splitn(5, ':');
     let (Some(h), Some(m), Some(s), Some(f), None) = (
         //get 4 values, if there's a fifth return 0, means if more than 5 values, it will also return 0
         length_split.next(),
