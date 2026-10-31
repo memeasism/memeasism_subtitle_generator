@@ -9,7 +9,8 @@ use std::io::Cursor;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
-const SUCCESS_SOUND: &[u8] = include_bytes!("../sounds/success.flac"); //embed the audio files into the binary
+//embed the audio files into the binary
+const SUCCESS_SOUND: &[u8] = include_bytes!("../sounds/success.flac");
 const ERROR_SOUND: &[u8] = include_bytes!("../sounds/error.flac");
 slint::include_modules!();
 struct Samples {
@@ -29,7 +30,7 @@ impl Samples {
     }
 }
 impl Iterator for Samples {
-    //iterator read samples
+    //iterator reads samples
     type Item = f32;
     fn next(&mut self) -> Option<f32> {
         let sample: Option<f32> = self.data.get(self.position).copied();
@@ -86,7 +87,7 @@ fn main() {
     let output_write: RcCell<String> = output.clone(); /*rccell because slint requires moving, wich sucks for changing output
     output is also updated as a variable instead of using ui just in case ui fails to update*/
     let output_read: RcCell<String> = output.clone();
-    let reset_error: RcCell<u32> = RcCell::new(0); //counter to overwrite error output in gui, so the 3 seconds isnt forced if a success happens
+    let reset_error: RcCell<u32> = RcCell::new(0); //counter that allows overwriting error output in gui, so the 3 seconds isnt forced if a success or ui update happens
     let reset_error_write: RcCell<u32> = reset_error.clone();
     let reset_error_read: RcCell<u32> = reset_error.clone();
     let app: GUI = GUI::new().unwrap();
@@ -148,12 +149,13 @@ fn main() {
             app_output.set_output_text(format!("ERROR COPYING: {}", result).into());
             if let Some(sound) = &error_sound {
                 if let Some(handle) = &current_audio_handle {
+                    //does a bunch of error checking to ensure we can use audio with no crash
                     let source: Samples = Samples::new(
                         Arc::clone(&sound.samples),
                         sound.channels,
                         sound.sample_rate,
                     );
-                    handle.mixer().add(source.amplify(0.075)); //does a bunch of error checking to ensure we can use audio with no crash
+                    handle.mixer().add(source.amplify(0.075));
                 }
             }
             let snapshot_current_error_count: u32 = (*reset_error_read.borrow()).wrapping_add(1);
