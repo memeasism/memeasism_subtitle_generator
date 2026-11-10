@@ -1,88 +1,23 @@
-#![windows_subsystem = "windows"]
+//#![windows_subsystem = "windows"]
 mod gen_text;
 mod parse_time;
 use arboard::Clipboard;
+use maudio::data_source::sources::decoder::DecoderBuilder;
+use maudio::engine::Engine;
 use rc_cell::RcCell;
-use rodio::{ChannelCount, Decoder, SampleRate, Source};
 use slint::ComponentHandle;
-use std::io::Cursor;
-use std::rc::Rc;
-use std::sync::Arc;
 use std::time::Duration;
+#[cfg(target_os = "windows")]
+use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
 //embed the audio files into the binary
 const SUCCESS_SOUND: &[u8] = include_bytes!("../sounds/success.flac");
 const ERROR_SOUND: &[u8] = include_bytes!("../sounds/error.flac");
 slint::include_modules!();
-struct Samples {
-    data: Arc<[f32]>, //would use Rc, but rodio requires being able to send, which is in Arc, and not Rc
-    channels: ChannelCount,
-    sample_rate: SampleRate,
-    position: usize,
-}
-impl Samples {
-    fn new(data: Arc<[f32]>, channels: ChannelCount, sample_rate: SampleRate) -> Self {
-        Self {
-            data,
-            channels,
-            sample_rate,
-            position: 0,
-        }
-    }
-}
-impl Iterator for Samples {
-    //iterator reads samples
-    type Item = f32;
-    fn next(&mut self) -> Option<f32> {
-        let sample: Option<f32> = self.data.get(self.position).copied();
-        if sample.is_some() {
-            self.position += 1;
-        }
-        sample
-    }
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let rem = self.data.len() - self.position;
-        (rem, Some(rem))
-    }
-}
-impl Source for Samples {
-    //get audio metadata
-    fn current_span_len(&self) -> Option<usize> {
-        Some(self.data.len() - self.position)
-    }
-    fn channels(&self) -> ChannelCount {
-        self.channels
-    }
-    fn sample_rate(&self) -> SampleRate {
-        self.sample_rate
-    }
-    fn total_duration(&self) -> Option<Duration> {
-        let denom: u64 = (self.channels.get() as u64) * (self.sample_rate.get() as u64);
-        if denom == 0 {
-            return None;
-        }
-        Some(Duration::from_secs_f64(
-            self.data.len() as f64 / denom as f64,
-        ))
-    }
-}
-struct DecodedSound {
-    channels: ChannelCount,
-    sample_rate: SampleRate,
-    samples: Arc<[f32]>,
-}
-fn decode_sound(bytes: &'static [u8]) -> Option<DecodedSound> {
-    //build a cached decoded sound
-    let decoder: Decoder<Cursor<&[u8]>> = Decoder::try_from(Cursor::new(bytes)).ok()?;
-    let channels: std::num::NonZero<u16> = decoder.channels();
-    let sample_rate: std::num::NonZero<u32> = decoder.sample_rate();
-    let samples: Arc<[f32]> = decoder.collect::<Vec<f32>>().into();
-    Some(DecodedSound {
-        channels,
-        sample_rate,
-        samples,
-    })
-}
 fn main() {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
+    }
     let output: RcCell<String> = RcCell::new(String::new());
     let output_write: RcCell<String> = output.clone(); /*rccell because slint requires moving, wich sucks for changing output
     output is also updated as a variable instead of using ui just in case ui fails to update*/
@@ -92,12 +27,17 @@ fn main() {
     let reset_error_read: RcCell<u32> = reset_error.clone();
     let app: GUI = GUI::new().unwrap();
     let app_weak: slint::Weak<GUI> = app.as_weak();
-    let success_sound: Option<DecodedSound> = decode_sound(SUCCESS_SOUND); //cache the decoded sound effects for better runtime performance
-    let error_sound: Option<DecodedSound> = decode_sound(ERROR_SOUND);
-    let audio_handle: Option<Rc<rodio::MixerDeviceSink>> =
-        rodio::DeviceSinkBuilder::open_default_sink()
-            .ok() //use rc for audio handle incase of a rare scenaro of a device with no audio output
-            .map(Rc::new);
+    let engine: Engine = Engine::new().unwrap();
+    let _engine_volume: Result<(), maudio::MaudioError> = engine.set_volume(0.075);
+    //decode sound effects
+    let success_decoder = DecoderBuilder::new_f32()
+        .from_memory(SUCCESS_SOUND)
+        .unwrap();
+    let error_decoder = DecoderBuilder::new_f32().from_memory(ERROR_SOUND).unwrap();
+    //cache the decoded sounds for better runtime performance
+    let success_sound: maudio::sound::Sound =
+        engine.new_sound_from_source(&success_decoder).unwrap();
+    let error_sound: maudio::sound::Sound = engine.new_sound_from_source(&error_decoder).unwrap();
     let mut clipboard: Result<Clipboard, String> =
         Clipboard::new().map_err(|error| error.to_string()); //load clipboard once, or return an error string
     app.on_inputs_changed(move || {
@@ -126,8 +66,6 @@ fn main() {
         ); //updates the output variable
         app_output.set_output_text(output_write.borrow().as_str().into()); //updates output ui
     });
-    let current_audio_handle: Option<Rc<rodio::MixerDeviceSink>> =
-        audio_handle.as_ref().map(Rc::clone); //sets cloned audio handle
     let app_weak: slint::Weak<GUI> = app.as_weak();
     app.on_copy_subtitle(move || {
         let Some(app_output) = app_weak.upgrade() else {
@@ -147,17 +85,7 @@ fn main() {
         if let Err(result) = clipboard_result {
             //runs actions if error and returns early
             app_output.set_output_text(format!("ERROR COPYING: {}", result).into());
-            if let Some(sound) = &error_sound {
-                if let Some(handle) = &current_audio_handle {
-                    //does a bunch of error checking to ensure we can use audio with no crash
-                    let source: Samples = Samples::new(
-                        Arc::clone(&sound.samples),
-                        sound.channels,
-                        sound.sample_rate,
-                    );
-                    handle.mixer().add(source.amplify(0.075));
-                }
-            }
+            error_sound.play_sound().unwrap();
             let snapshot_current_error_count: u32 = (*reset_error_read.borrow()).wrapping_add(1);
             *reset_error_read.borrow_mut() = snapshot_current_error_count;
             let reset_error_timer: RcCell<u32> = reset_error_read.clone();
@@ -174,16 +102,7 @@ fn main() {
 
             return;
         }
-        if let Some(handle) = &current_audio_handle {
-            if let Some(sound) = &success_sound {
-                let source: Samples = Samples::new(
-                    Arc::clone(&sound.samples),
-                    sound.channels,
-                    sound.sample_rate,
-                );
-                handle.mixer().add(source.amplify(0.075));
-            }
-        }
+        success_sound.play_sound().unwrap();
         let reset_error_count = (*reset_error_read.borrow()).wrapping_add(1);
         *reset_error_read.borrow_mut() = reset_error_count;
         app_output.set_output_text(content.into());

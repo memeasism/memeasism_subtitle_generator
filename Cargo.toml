@@ -15,8 +15,11 @@ build = "build.rs"
 [dependencies]
 arboard = {version = "3.7.0", default-features = false}
 rc-cell = "0.1.0"
-rodio = "0.23.0"
+maudio = "0.1.10"
 slint = "1.18.1"
+
+[target.'cfg(windows)'.dependencies]
+windows = {version = "0.62.2", features = ["Win32_System_Com"] }
 
 
 [build-dependencies]
